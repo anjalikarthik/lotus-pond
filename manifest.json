@@ -1,0 +1,16 @@
+{
+  "name": "Lotus Pond",
+  "short_name": "Lotus Pond",
+  "description": "A calm puzzle game. Turn the stones so the water reaches every lotus.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d1a20",
+  "theme_color": "#0d1a20",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
