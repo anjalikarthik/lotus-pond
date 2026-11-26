@@ -54,6 +54,7 @@ button.btn[aria-pressed=true]{background:rgba(255,255,255,.18)}
 <div id="bar">
   <button class="btn" id="bSound" aria-pressed="true">Sound</button>
   <button class="btn" id="bNew">New layout</button>
+  <button class="btn" id="bExit">Exit</button>
 </div>
 <script>
 const DIRS=[[-1,0],[0,1],[1,0],[0,-1]],SCALE=[261.6,293.7,329.6,392,440,523.3,587.3,659.3];
@@ -134,13 +135,31 @@ function turn(i){
   T[i].r++;
   $('board').children[i].firstChild.style.transform='rotate('+T[i].r*90+'deg)';
   const s=update();
-  tone(SCALE[s.wet%SCALE.length]);
+  click();tone(SCALE[s.wet%SCALE.length],.05,.035,1.4);
   if(s.done)win();
 }
 
+function ac(){ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();if(ctx.state==='suspended')ctx.resume();return ctx}
+function click(){
+  if(!sound)return;
+  const c=ac(),t=c.currentTime,len=Math.floor(c.sampleRate*.09),b=c.createBuffer(1,len,c.sampleRate),d=b.getChannelData(0);
+  for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3);
+  const s=c.createBufferSource();s.buffer=b;
+  const f=c.createBiquadFilter();f.type='bandpass';f.frequency.value=900;f.Q.value=.8;
+  const g=c.createGain();g.gain.value=.45;
+  s.connect(f).connect(g).connect(c.destination);s.start(t);
+  const o=c.createOscillator(),og=c.createGain();o.type='sine';
+  o.frequency.setValueAtTime(420,t);o.frequency.exponentialRampToValueAtTime(240,t+.12);
+  og.gain.setValueAtTime(.12,t);og.gain.exponentialRampToValueAtTime(.0001,t+.16);
+  o.connect(og).connect(c.destination);o.start(t);o.stop(t+.18);
+}
+function success(){
+  [523.3,587.3,659.3,784,880,1046.5,1318.5].forEach((f,j)=>{tone(f,.4+j*.16,.08,2.2);tone(f*2,.4+j*.16,.022,1.5)});
+  [523.3,659.3,784,1046.5].forEach(f=>tone(f,1.7,.06,4.2));
+}
 function win(){
   locked=true;$('msg').classList.add('show');
-  [0,2,4,5,7].forEach((k,j)=>tone(SCALE[k]*(k>4?1:1),.5+j*.22,.05,2.6));
+  success();
 }
 
 function tone(f,t0=0,g0=.07,dur=1.6){
@@ -160,6 +179,11 @@ $('next').onclick=()=>{
   build();
 };
 $('bNew').onclick=build;
+$('bExit').onclick=()=>{
+  if(!confirm('Leave the game? Your progress is saved.'))return;
+  window.close();
+  setTimeout(()=>{$('sub').textContent='You can now close the app with your phone Home or Back button.'},300);
+};
 $('bSound').onclick=()=>{sound=!sound;$('bSound').setAttribute('aria-pressed',sound)};
 document.querySelectorAll('#diff .btn').forEach(b=>{b.onclick=()=>{diff=b.dataset.d;try{localStorage.setItem('lotus-diff',diff)}catch(e){}setDiff();loadLevel();build()}});
 setDiff();loadLevel();
