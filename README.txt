@@ -1,9 +1,10 @@
-LOTUS POND - how to turn this folder into an Android app
+LOTUS POND - STORE KIT
+======================
+app-icon-512.png               512x512 icon for Play Console
+feature-graphic-1024x500.png   feature graphic (banner) for the store page
+listing.txt                    title, descriptions, form answers, screenshot list
 
-1. Put this whole folder online (HTTPS is required):
-   - Netlify Drop: go to app.netlify.com/drop and drag this folder in. You get a link like https://something.netlify.app
-   - or GitHub Pages
-2. Open that link in Chrome on your phone: the menu will now offer "Install app" and it opens full screen with no browser bars.
-3. For an APK/AAB file: open pwabuilder.com, paste your https link, press Start, choose Android, then Download.
-   The zip has an APK (install directly) and an AAB (upload to Play Store).
-4. Install the APK: copy it to your phone, tap it, allow "Install unknown apps".
+Remember to:
+1. Replace [your email] and [your-site] in listing.txt.
+2. Edit privacy.html (inside the game folder) and put your email address in it.
+3. Upload the game folder to your public https site, then use pwabuilder.com to build the Android package.

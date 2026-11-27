@@ -59,7 +59,22 @@ button.btn[aria-pressed=true]{background:rgba(255,255,255,.18)}
 .pin{fill:var(--wet);opacity:.75}
 #turns{font-size:16px;letter-spacing:.03em;min-height:1.3em;opacity:.92;transition:color .4s}
 #turns.low{color:var(--pink)}
-@media (prefers-reduced-motion:reduce){*{transition-duration:.01s!important;transition-delay:0s!important}}
+
+.core path{stroke:#fff;opacity:0;transition:opacity .6s calc(var(--d,0)*80ms)}
+.wet .core path{opacity:.55}
+.tile.hint .bg{stroke:var(--pink);stroke-opacity:1;stroke-width:3}
+.tile.hint{animation:hp 1s 3}
+@keyframes hp{50%{opacity:.45}}
+.lvb small{position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:9px;letter-spacing:1px}
+.ov{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(5,10,14,.74);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:11}
+.ov.open{display:flex}
+.pnl{width:min(92vw,380px);max-height:86vh;overflow:auto;padding:20px;border-radius:22px;background:rgba(18,30,36,.96);display:flex;flex-direction:column;gap:10px}
+.pnl h2{margin:0 0 4px;font-weight:500;font-size:20px;text-align:center}
+.pnl .btn{display:block;text-align:center;text-decoration:none;box-sizing:border-box}
+.pnl ol{margin:0;padding-left:22px;line-height:1.6;font-size:16px}
+.row{display:flex;gap:8px}.row .btn{flex:1;padding:10px 6px}
+.tg[aria-pressed=false]{opacity:.5}
+@media (prefers-reduced-motion:reduce){*{transition-duration:.01s!important;transition-delay:0s!important;animation-duration:.01s!important}}
 </style>
 </head>
 <body>
@@ -70,13 +85,24 @@ button.btn[aria-pressed=true]{background:rgba(255,255,255,.18)}
 <div id="board"></div>
 <div id="msg"><span id="msgt">Every lotus is open.</span><button class="btn" id="next">Next level</button></div>
 <div id="bar">
-  <button class="btn" id="bSound" aria-pressed="true">Sound</button>
   <button class="btn" id="bUndo">Undo</button>
+  <button class="btn" id="bHint">Hint</button>
   <button class="btn" id="bLevels">Levels</button>
-  <button class="btn" id="bNew">Restart</button>
-  <button class="btn" id="bExit">Exit</button>
+  <button class="btn" id="bMenu">Menu</button>
 </div>
 <div id="lv" role="dialog" aria-modal="true" aria-labelledby="lvh"><div id="lvp"><h2 id="lvh">Levels</h2><div id="grid"></div><button class="btn" id="lvc">Close</button></div></div>
+<div id="menu" class="ov" role="dialog" aria-modal="true" aria-labelledby="mh"><div class="pnl"><h2 id="mh">Menu</h2>
+<button class="btn" id="mDaily">Daily Pond</button>
+<button class="btn" id="mHow">How to play</button>
+<button class="btn" id="mRestart">Restart this stage</button>
+<div class="row"><button class="btn tg" id="tSound" aria-pressed="true">Sound</button><button class="btn tg" id="tMusic" aria-pressed="false">Music</button><button class="btn tg" id="tVib" aria-pressed="true">Vibration</button></div>
+<a class="btn" href="privacy.html">Privacy policy</a>
+<button class="btn" id="mReset">Reset progress</button>
+<button class="btn" id="mExit">Exit</button>
+<button class="btn" id="mClose">Close</button></div></div>
+<div id="tut" class="ov" role="dialog" aria-modal="true" aria-labelledby="th"><div class="pnl"><h2 id="th">How to play</h2>
+<ol><li>Tap a stone to turn it.</li><li>Guide the glowing spring through the stones until the water reaches every lotus.</li><li>Lotuses bloom when the water arrives. Bloom them all to finish.</li><li>Stuck? Use Undo to take a move back, or Hint to see a stone that needs turning.</li><li>Stones with a dot are locked. Medium and harder modes have limited turns.</li></ol>
+<button class="btn" id="tutOk">Start playing</button></div></div>
 <script>
 const DIRS=[[-1,0],[0,1],[1,0],[0,-1]],SCALE=[261.6,293.7,329.6,392,440,523.3,587.3,659.3];
 const ARMS=['M50 50V0','M50 50H100','M50 50V100','M50 50H0'];
@@ -88,6 +114,7 @@ const NAMES={square:'Square',octagon:'Octagon',plus:'Cross',triangle:'Triangle',
 const MIN={square:3,octagon:4,triangle:4,plus:5,diamond:5,ring:5,hourglass:5,heart:6};
 const SLACK={medium:[1.6,3],hard:[1.35,2],ultimate:[1.2,2]};
 const UNDOS={medium:5,hard:3,ultimate:2};
+const HINTS={easy:3,medium:2,hard:1,ultimate:1};
 const THEMES=[
  {name:'Moonlit Teal',bg1:'#21414a',bg2:'#0d1a20',wet:'#8be8d4',dry:'#51656d',pink:'#f2b8c6'},
  {name:'Rose Dusk',bg1:'#4a2a3a',bg2:'#1a0e18',wet:'#ffb3c1',dry:'#6d5560',pink:'#ffe0b8'},
@@ -116,7 +143,7 @@ const isChal=l=>l%6===0;
 const nlev=l=>l-Math.floor(l/6);
 const theme=l=>isChal(l)?CTHEMES[(l/6-1)%CTHEMES.length]:THEMES[(nlev(l)-1)%THEMES.length];
 const $=id=>document.getElementById(id);
-let level=1,maxL=1,n=3,T=[],srcs=[],locked=false,sound=true,ctx=null,diff='easy',rnd=Math.random,left=0,limited=false,state='',hist=[],undos=0;
+let level=1,maxL=1,n=3,T=[],srcs=[],locked=false,sound=true,ctx=null,diff='easy',rnd=Math.random,left=0,limited=false,state='',hist=[],undos=0,daily=false,hints=0,parV=0,vibOn=true,musicOn=false;
 const lk=()=>'lotus2-level-'+diff;
 
 try{diff=localStorage.getItem('lotus-diff')||'easy';if(!RANGE[diff])diff='easy'}catch(e){}
@@ -221,12 +248,15 @@ function update(){
 }
 
 function makePuzzle(){
-  const ch=isChal(level)?CHAL[level/6-1]:null;
-  let sh,springs=1,locks=0;
-  if(ch){n=CH_N[diff];sh=ch.shape;springs=ch.springs;locks=ch.locks}
+  let ch=isChal(level)&&!daily?CHAL[level/6-1]:null,sh,springs=1,locks=0;
+  if(daily){
+    const q=mulberry(seedOf('dd:'+today()+diff));n=RANGE[diff][1];
+    const pool=SHAPES[diff].concat(['heart']).filter(x=>MIN[x]<=n);
+    sh=pool[(q()*pool.length)|0];springs=q()<.4?2:1;locks=q()<.4?.15:0;
+  }else if(ch){n=CH_N[diff];sh=ch.shape;springs=ch.springs;locks=ch.locks}
   else{const [lo,hi]=RANGE[diff],span=hi-lo+1;n=lo+Math.min(span-1,Math.floor((nlev(level)-1)/Math.ceil(30/span)))}
-  rnd=mulberry(seedOf(diff+':'+level));
-  if(!ch){const so=SHAPES[diff].filter(x=>MIN[x]<=n);sh=(so.length?so:['square'])[(rnd()*Math.max(so.length,1))|0]}
+  rnd=mulberry(seedOf(daily?'daily:'+today()+':'+diff:diff+':'+level));
+  if(!ch&&!daily){const so=SHAPES[diff].filter(x=>MIN[x]<=n);sh=(so.length?so:['square'])[(rnd()*Math.max(so.length,1))|0]}
   let tries=0;
   do{
     const g=gen(sh,springs);
@@ -240,20 +270,20 @@ function makePuzzle(){
   }while(flow().every((v,i)=>T[i].empty||v>=0)&&++tries<50);
   let par=0;
   T.forEach(t=>{if(t.empty)return;let k=0,m=rot(t.m,t.r);while(m!==t.m&&k<4){m=rot(m,1);k++}par+=k});
-  limited=!!SLACK[diff];left=limited?Math.ceil(par*SLACK[diff][0])+SLACK[diff][1]:0;
+  parV=par;limited=!!SLACK[diff];left=limited?Math.ceil(par*SLACK[diff][0])+SLACK[diff][1]:0;
   return {sh,ch};
 }
 
 function build(restore){
   locked=false;$('msg').classList.remove('show');$('msgt').textContent='Every lotus is open.';$('next').textContent='Next level';
   const {sh,ch}=makePuzzle();
-  const th=theme(level);applyTheme(th);
-  state='';hist=[];undos=limited?UNDOS[diff]:Infinity;
-  if(restore&&restore.r&&restore.r.length===T.length){T.forEach((t,i)=>{t.r=restore.r[i]|0});if(limited)left=restore.left|0;hist=Array.isArray(restore.h)?restore.h:[];if(limited&&restore.u>=0)undos=restore.u}
+  const th=daily?dailyTheme():theme(level);applyTheme(th);
+  state='';hist=[];hints=HINTS[diff];undos=limited?UNDOS[diff]:Infinity;
+  if(restore&&restore.r&&restore.r.length===T.length){T.forEach((t,i)=>{t.r=restore.r[i]|0});if(limited)left=restore.left|0;hist=Array.isArray(restore.h)?restore.h:[];if(limited&&restore.u>=0)undos=restore.u;if(restore.k>=0)hints=restore.k}
   showTurns();saveState();
-  $('title').textContent=ch?'Challenge '+(level/6)+' \u2605':'Level '+nlev(level);
-  $('sub').textContent=ch?ch.name+': '+ch.desc:((level===1&&diff==='easy')?'Turn the stones so the water reaches every lotus.':NAMES[sh]+' pond \u00b7 '+th.name);
-  const b=$('board');b.classList.toggle('chal',!!ch);b.style.gridTemplateColumns='repeat('+n+',1fr)';b.innerHTML='';
+  $('title').textContent=daily?'Daily Pond':ch?'Challenge '+(level/6)+' \u2605':'Level '+nlev(level);
+  $('sub').textContent=daily?today()+' \u00b7 '+NAMES[sh]+' pond':ch?ch.name+': '+ch.desc:((level===1&&diff==='easy')?'Turn the stones so the water reaches every lotus.':NAMES[sh]+' pond \u00b7 '+th.name);
+  const b=$('board');b.classList.toggle('chal',!!ch||daily);b.style.gridTemplateColumns='repeat('+n+',1fr)';b.innerHTML='';
   T.forEach((t,i)=>{
     if(t.empty){b.appendChild(document.createElement('div'));return}
     const bits=[0,1,2,3].filter(k=>t.m>>k&1),isSrc=srcs.includes(i),leaf=bits.length===1&&!isSrc;
@@ -264,7 +294,7 @@ function build(restore){
     if(t.locked)deco+='<circle class="pin" cx="82" cy="18" r="5"/>';
     const el=document.createElement('button');
     el.className='tile'+(t.locked?' locked':'');el.setAttribute('aria-label','Stone '+(i+1)+(t.locked?', locked':', tap to turn'));
-    el.innerHTML='<svg viewBox="0 0 100 100"><rect class="bg" x="3" y="3" width="94" height="94" rx="14"/><g class="ch" fill="none" stroke-width="14">'+bits.map(k=>'<path d="'+ARMS[k]+'"/>').join('')+'</g>'+deco+'</svg>';
+    el.innerHTML='<svg viewBox="0 0 100 100"><rect class="bg" x="3" y="3" width="94" height="94" rx="14"/><g class="ch" fill="none" stroke-width="14">'+bits.map(k=>'<path d="'+ARMS[k]+'"/>').join('')+'</g><g class="core" fill="none" stroke-width="4">'+bits.map(k=>'<path d="'+ARMS[k]+'"/>').join('')+'</g>'+deco+'</svg>';
     el.firstChild.style.transform='rotate('+t.r*90+'deg)';
     el.onclick=()=>turn(i);
     b.appendChild(el);
@@ -272,8 +302,8 @@ function build(restore){
   update();
 }
 
-function saveState(){try{localStorage.setItem('lotus2-state-'+diff,JSON.stringify({level,left,r:T.map(t=>t.r),h:hist.slice(-300),u:undos===Infinity?-1:undos}))}catch(e){}}
-function clearState(){try{localStorage.removeItem('lotus2-state-'+diff)}catch(e){}}
+function saveState(){if(daily)return;try{localStorage.setItem('lotus2-state-'+diff,JSON.stringify({level,left,r:T.map(t=>t.r),h:hist.slice(-300),u:undos===Infinity?-1:undos,k:hints}))}catch(e){}}
+function clearState(){if(daily)return;try{localStorage.removeItem('lotus2-state-'+diff)}catch(e){}}
 function loadState(){try{const o=JSON.parse(localStorage.getItem('lotus2-state-'+diff)||'null');return o&&o.level>=1&&o.level<=TOTAL&&Array.isArray(o.r)?o:null}catch(e){return null}}
 function start(){
   const sv=sound;sound=false;
@@ -284,6 +314,20 @@ function start(){
   sound=sv;
 }
 
+function hint(){
+  if(locked||hints<=0)return;
+  const d=flow();let best=-1,bd=1e9;
+  T.forEach((t,i)=>{
+    if(t.empty||t.locked||eff(i)===t.m)return;
+    const r=(i/n)|0,c=i%n;let dist=d[i]>=0?d[i]:1e8;
+    DIRS.forEach(dd=>{const a=r+dd[0],b=c+dd[1];if(a<0||b<0||a>=n||b>=n)return;const k=a*n+b;if(d[k]>=0)dist=Math.min(dist,d[k])});
+    if(dist<bd){bd=dist;best=i}
+  });
+  if(best<0)return;
+  hints--;updateUndo();saveState();
+  const el=$('board').children[best];el.classList.add('hint');setTimeout(()=>el.classList.remove('hint'),3300);
+  pluck(660,0,.06,.8);
+}
 function undo(){
   if(!hist.length||undos<=0||state==='win')return;
   const i=hist.pop();T[i].r--;
@@ -295,17 +339,38 @@ function undo(){
 
 function turn(i){
   if(locked)return;
-  if(T[i].locked){pluck(180,0,.05,.4);return}
+  if(T[i].locked){pluck(180,0,.05,.4);vib(40);return}
   T[i].r++;hist.push(i);if(hist.length>500)hist.shift();if(limited)left--;showTurns();
   $('board').children[i].firstChild.style.transform='rotate('+T[i].r*90+'deg)';
   const s=update();saveState();
-  drop();pluck(SCALE[s.wet%SCALE.length],.05,.1,1);
+  drop();pluck(SCALE[s.wet%SCALE.length],.05,.1,1);vib(12);
   if(s.done)win();else if(limited&&left<=0)fail();
 }
 
+const vib=p=>{try{if(vibOn&&navigator.vibrate)navigator.vibrate(p)}catch(e){}};
+function saveSet(){try{localStorage.setItem('lotus2-set',JSON.stringify({sound,musicOn,vibOn}))}catch(e){}}
+function loadSet(){try{const o=JSON.parse(localStorage.getItem('lotus2-set')||'null');if(o){sound=o.sound!==false;musicOn=!!o.musicOn;vibOn=o.vibOn!==false}}catch(e){}}
+function syncSet(){$('tSound').setAttribute('aria-pressed',sound);$('tMusic').setAttribute('aria-pressed',musicOn);$('tVib').setAttribute('aria-pressed',vibOn)}
+const pad2=v=>String(v).padStart(2,'0');
+const dstr=d=>d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+function today(){return dstr(new Date())}
+function bumpStreak(){
+  let o={last:'',count:0};try{o=JSON.parse(localStorage.getItem('lotus2-streak')||'null')||o}catch(e){}
+  const t=today();if(o.last===t)return o.count;
+  const y=new Date();y.setDate(y.getDate()-1);
+  o.count=o.last===dstr(y)?o.count+1:1;o.last=t;
+  try{localStorage.setItem('lotus2-streak',JSON.stringify(o))}catch(e){}
+  return o.count;
+}
+const sk=()=>'lotus2-stars-'+diff;
+function getStars(){try{return JSON.parse(localStorage.getItem(sk())||'{}')}catch(e){return {}}}
+function putStars(l,st){const o=getStars();if(!o[l]||o[l]<st){o[l]=st;try{localStorage.setItem(sk(),JSON.stringify(o))}catch(e){}}}
+function starsFor(){const u=hist.length;return u<=Math.ceil(parV*1.25)?3:(u<=Math.ceil(parV*1.7)+2?2:1)}
+function dailyTheme(){const all=THEMES.concat(CTHEMES);return all[seedOf(today()+diff)%all.length]}
 function ac(){ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();if(ctx.state==='suspended')ctx.resume();return ctx}
-function pluck(f,t0=0,g0=.09,dur=1.2){
-  if(!sound)return;
+function pluck(...a){try{pluck0(...a)}catch(e){}}
+function pluck0(f,t0=0,g0=.09,dur=1.2,force){
+  if(!sound&&!force)return;
   const c=ac(),t=c.currentTime+t0;
   [[1,1],[2,.28],[3.01,.1]].forEach(([m,a])=>{
     const o=c.createOscillator(),g=c.createGain();
@@ -315,19 +380,27 @@ function pluck(f,t0=0,g0=.09,dur=1.2){
     o.connect(g).connect(c.destination);o.start(t);o.stop(t+dur/m+.05);
   });
 }
-function drop(){
+function drop(...a){try{drop0(...a)}catch(e){}}
+function drop0(){
   if(!sound)return;
   const c=ac(),t=c.currentTime,o=c.createOscillator(),g=c.createGain();
   o.type='sine';o.frequency.setValueAtTime(380,t);o.frequency.exponentialRampToValueAtTime(980,t+.09);
   g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.16,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+.16);
   o.connect(g).connect(c.destination);o.start(t);o.stop(t+.2);
 }
-function pad(f,t0,g0,dur){
-  if(!sound)return;
+function pad(...a){try{pad0(...a)}catch(e){}}
+function pad0(f,t0,g0,dur,force){
+  if(!sound&&!force)return;
   const c=ac(),t=c.currentTime+t0,o=c.createOscillator(),g=c.createGain();
   o.type='sine';o.frequency.value=f;
   g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(g0,t+.5);g.gain.exponentialRampToValueAtTime(.0001,t+dur);
   o.connect(g).connect(c.destination);o.start(t);o.stop(t+dur+.05);
+}
+let mT=null;
+function music(){
+  clearInterval(mT);mT=null;if(!musicOn)return;
+  const go=()=>{if(!musicOn||document.hidden)return;try{pad(SCALE[(Math.random()*5)|0]/2,0,.03,7,true);if(Math.random()<.6)pluck(SCALE[(Math.random()*8)|0],.5,.035,2.6,true)}catch(e){}};
+  go();mT=setInterval(go,3000);
 }
 function success(){
   [523.3,587.3,659.3,784,880,1046.5,1174.7,1318.5,1568].forEach((f,j)=>pluck(f,.3+j*.11,.1,1.4));
@@ -338,6 +411,7 @@ function success(){
 function updateUndo(){
   const b=$('bUndo');b.textContent='Undo'+(limited?' ('+undos+')':'');
   b.disabled=!hist.length||undos<=0||state==='win';
+  const h=$('bHint');h.textContent='Hint ('+hints+')';h.disabled=hints<=0||locked||state==='win';
 }
 function showTurns(){updateUndo();
   const t=$('turns');
@@ -351,24 +425,37 @@ function fail(){
 }
 function win(){
   locked=true;$('msg').classList.add('show');
-  if(level>=maxL){maxL=level+1;saveMax()}
-  $('msgt').textContent=isChal(level)?'Challenge complete!':'Every lotus is open.';
-  $('next').textContent=level>=TOTAL?'All levels':(isChal(level+1)?'Next challenge':'Next level');state='win';clearState();updateUndo();
-  success();
+  const st=starsFor(),bar='\u2605'.repeat(st)+'\u2606'.repeat(3-st);
+  let msg=isChal(level)&&!daily?'Challenge complete!':'Every lotus is open.';
+  if(daily){
+    msg='Daily Pond complete!';
+    try{const k='lotus2-daily-'+today()+'-'+diff;if(st>(+localStorage.getItem(k)||0))localStorage.setItem(k,st)}catch(e){}
+    const sr=bumpStreak();msg+=' Streak: '+sr+(sr===1?' day':' days');
+    $('next').textContent='Back to levels';
+  }else{
+    if(level>=maxL){maxL=level+1;saveMax()}
+    putStars(level,st);
+    $('next').textContent=level>=TOTAL?'All levels':(isChal(level+1)?'Next challenge':'Next level');
+  }
+  $('msgt').textContent=msg+'  '+bar;
+  state='win';clearState();updateUndo();
+  success();vib([40,60,40,60,120]);
 }
 
 function openMenu(){
-  $('lvh').textContent=diff[0].toUpperCase()+diff.slice(1)+' levels';
+  const ss=getStars(),total=Object.values(ss).reduce((a,b)=>a+b,0);
+  $('lvh').textContent=diff[0].toUpperCase()+diff.slice(1)+' \u00b7 '+total+'/'+TOTAL*3+' stars';
   const g=$('grid');g.innerHTML='';
   const unlocked=Math.min(maxL,TOTAL);
   for(let l=1;l<=TOTAL;l++){
     const t=theme(l),c=isChal(l),b=document.createElement('button');
-    b.className='lvb'+(c?' chb':'')+(l===level?' cur':'')+(l<maxL?' done':'');
-    b.textContent=c?'\u2605':nlev(l);b.disabled=l>unlocked;
+    b.className='lvb'+(c?' chb':'')+(!daily&&l===level?' cur':'')+(l<maxL?' done':'');
+    b.innerHTML=(c?'\u2605':nlev(l))+(ss[l]?'<small>'+'\u2605'.repeat(ss[l])+'</small>':'');
+    b.disabled=l>unlocked;
     b.style.background='linear-gradient(135deg,'+t.bg1+','+t.bg2+')';
     b.style.color=t.wet;b.style.boxShadow='inset 0 0 0 2px '+t.wet+'88';
     b.setAttribute('aria-label',(c?'Challenge '+(l/6):'Level '+nlev(l))+', '+t.name);
-    b.onclick=()=>{level=l;closeMenu();build()};
+    b.onclick=()=>{level=l;daily=false;closeMenu();build()};
     g.appendChild(b);
   }
   $('lv').classList.add('open');
@@ -377,23 +464,41 @@ function closeMenu(){$('lv').classList.remove('open')}
 
 $('next').onclick=()=>{
   if(state==='fail'){build();return}
+  if(daily){daily=false;start();return}
   if(level>=TOTAL){openMenu();return}
   level++;build();
 };
-$('bNew').onclick=build;
+const ov=(id,on)=>$(id).classList.toggle('open',on);
+$('bHint').onclick=hint;
+$('bMenu').onclick=()=>{syncSet();ov('menu',true)};
+$('mClose').onclick=()=>ov('menu',false);
+$('mDaily').onclick=()=>{ov('menu',false);daily=true;build()};
+$('mHow').onclick=()=>{ov('menu',false);ov('tut',true)};
+$('mRestart').onclick=()=>{ov('menu',false);build()};
+$('mExit').onclick=exitGame;
+$('mReset').onclick=()=>{
+  if(!confirm('Reset all levels, stars and streaks?'))return;
+  try{Object.keys(localStorage).filter(k=>k.indexOf('lotus2-')===0&&k!=='lotus2-set'&&k!=='lotus2-tut').forEach(k=>localStorage.removeItem(k))}catch(e){}
+  ov('menu',false);daily=false;start();
+};
+$('tSound').onclick=()=>{sound=!sound;saveSet();syncSet()};
+$('tMusic').onclick=()=>{musicOn=!musicOn;saveSet();syncSet();music()};
+$('tVib').onclick=()=>{vibOn=!vibOn;saveSet();syncSet();vib(30)};
+$('tutOk').onclick=()=>{ov('tut',false);try{localStorage.setItem('lotus2-tut','1')}catch(e){}};
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)music()});
 $('bUndo').onclick=undo;
 $('bLevels').onclick=openMenu;
 $('lvc').onclick=closeMenu;
 $('lv').onclick=e=>{if(e.target===$('lv'))closeMenu()};
-addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu()});
-$('bExit').onclick=()=>{
+addEventListener('keydown',e=>{if(e.key==='Escape'){closeMenu();['menu','tut'].forEach(x=>$(x).classList.remove('open'))}});
+function exitGame(){
   if(!confirm('Leave the game? Your progress is saved.'))return;
   window.close();
   setTimeout(()=>{$('sub').textContent='You can now close the app with your phone Home or Back button.'},300);
-};
-$('bSound').onclick=()=>{sound=!sound;$('bSound').setAttribute('aria-pressed',sound)};
-document.querySelectorAll('#diff .btn').forEach(b=>{b.onclick=()=>{diff=b.dataset.d;try{localStorage.setItem('lotus-diff',diff)}catch(e){}setDiff();start()}});
-setDiff();start();
+}
+document.querySelectorAll('#diff .btn').forEach(b=>{b.onclick=()=>{diff=b.dataset.d;try{localStorage.setItem('lotus-diff',diff)}catch(e){}daily=false;setDiff();start()}});
+loadSet();syncSet();setDiff();start();music();
+try{if(!localStorage.getItem('lotus2-tut'))ov('tut',true)}catch(e){}
 </script>
 <script>if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(function(){})</script>
 </body>
