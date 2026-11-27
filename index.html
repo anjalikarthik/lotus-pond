@@ -167,7 +167,7 @@ function update(){
   return {wet,done:wet===tot};
 }
 
-function build(){
+function build(restore){
   const [lo,hi]=RANGE[diff],span=hi-lo+1;
   n=lo+Math.min(span-1,Math.floor((level-1)/Math.ceil(TOTAL/span)));
   locked=false;$('msg').classList.remove('show');$('msgt').textContent='Every lotus is open.';$('next').textContent='Next level';
@@ -178,7 +178,9 @@ function build(){
     const g=gen(sh);T=g.m.map((m,i)=>({m,r:(rnd()*4)|0,empty:!g.seen[i]}));src=g.s;
   }while(flow().every((v,i)=>T[i].empty||v>=0));
   let par=0;T.forEach(t=>{if(t.empty)return;let k=0,m=rot(t.m,t.r);while(m!==t.m&&k<4){m=rot(m,1);k++}par+=k});
-  limited=!!SLACK[diff];left=limited?Math.ceil(par*SLACK[diff][0])+SLACK[diff][1]:0;state='';showTurns();
+  limited=!!SLACK[diff];left=limited?Math.ceil(par*SLACK[diff][0])+SLACK[diff][1]:0;state='';
+  if(restore&&restore.r&&restore.r.length===T.length){T.forEach((t,i)=>{t.r=restore.r[i]|0});if(limited)left=restore.left|0}
+  showTurns();saveState();
   $('title').textContent='Level '+level;
   $('sub').textContent=(level===1&&diff==='easy')?'Turn the stones so the water reaches every lotus.':NAMES[sh]+' pond · '+th.name;
   const b=$('board');b.style.gridTemplateColumns='repeat('+n+',1fr)';b.innerHTML='';
@@ -199,43 +201,58 @@ function build(){
   update();
 }
 
+function saveState(){try{localStorage.setItem('lotus-state-'+diff,JSON.stringify({level,left,r:T.map(t=>t.r)}))}catch(e){}}
+function clearState(){try{localStorage.removeItem('lotus-state-'+diff)}catch(e){}}
+function loadState(){try{const o=JSON.parse(localStorage.getItem('lotus-state-'+diff)||'null');return o&&o.level>=1&&o.level<=TOTAL&&Array.isArray(o.r)?o:null}catch(e){return null}}
+function start(){
+  const sv=sound;sound=false;
+  loadLevel();const st=loadState();if(st)level=st.level;
+  build(st);
+  const r=update();
+  if(r.done)win();else if(limited&&left<=0)fail();
+  sound=sv;
+}
+
 function turn(i){
   if(locked)return;
   T[i].r++;if(limited){left--;showTurns()}
   $('board').children[i].firstChild.style.transform='rotate('+T[i].r*90+'deg)';
-  const s=update();
-  click();tone(SCALE[s.wet%SCALE.length],.05,.035,1.4);
+  const s=update();saveState();
+  drop();pluck(SCALE[s.wet%SCALE.length],.05,.1,1);
   if(s.done)win();else if(limited&&left<=0)fail();
 }
 
 function ac(){ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();if(ctx.state==='suspended')ctx.resume();return ctx}
-function click(){
+function pluck(f,t0=0,g0=.09,dur=1.2){
   if(!sound)return;
-  const c=ac(),t=c.currentTime,len=Math.floor(c.sampleRate*.09),b=c.createBuffer(1,len,c.sampleRate),d=b.getChannelData(0);
-  for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3);
-  const s=c.createBufferSource();s.buffer=b;
-  const f=c.createBiquadFilter();f.type='bandpass';f.frequency.value=900;f.Q.value=.8;
-  const g=c.createGain();g.gain.value=.45;
-  s.connect(f).connect(g).connect(c.destination);s.start(t);
-  const o=c.createOscillator(),og=c.createGain();o.type='sine';
-  o.frequency.setValueAtTime(420,t);o.frequency.exponentialRampToValueAtTime(240,t+.12);
-  og.gain.setValueAtTime(.12,t);og.gain.exponentialRampToValueAtTime(.0001,t+.16);
-  o.connect(og).connect(c.destination);o.start(t);o.stop(t+.18);
+  const c=ac(),t=c.currentTime+t0;
+  [[1,1],[2,.28],[3.01,.1]].forEach(([m,a])=>{
+    const o=c.createOscillator(),g=c.createGain();
+    o.type=m===1?'triangle':'sine';o.frequency.value=f*m;
+    g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(g0*a,t+.006);
+    g.gain.exponentialRampToValueAtTime(.0001,t+dur/m);
+    o.connect(g).connect(c.destination);o.start(t);o.stop(t+dur/m+.05);
+  });
 }
-function success(){
-  [523.3,587.3,659.3,784,880,1046.5,1318.5].forEach((f,j)=>{tone(f,.4+j*.16,.08,2.2);tone(f*2,.4+j*.16,.022,1.5)});
-  [523.3,659.3,784,1046.5].forEach(f=>tone(f,1.7,.06,4.2));
-}
-function tone(f,t0=0,g0=.07,dur=1.6){
+function drop(){
   if(!sound)return;
-  const c=ac(),o=c.createOscillator(),g=c.createGain(),t=c.currentTime+t0;
+  const c=ac(),t=c.currentTime,o=c.createOscillator(),g=c.createGain();
+  o.type='sine';o.frequency.setValueAtTime(380,t);o.frequency.exponentialRampToValueAtTime(980,t+.09);
+  g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.16,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+.16);
+  o.connect(g).connect(c.destination);o.start(t);o.stop(t+.2);
+}
+function pad(f,t0,g0,dur){
+  if(!sound)return;
+  const c=ac(),t=c.currentTime+t0,o=c.createOscillator(),g=c.createGain();
   o.type='sine';o.frequency.value=f;
-  g.gain.setValueAtTime(.0001,t);
-  g.gain.exponentialRampToValueAtTime(g0,t+.03);
-  g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(g0,t+.5);g.gain.exponentialRampToValueAtTime(.0001,t+dur);
   o.connect(g).connect(c.destination);o.start(t);o.stop(t+dur+.05);
 }
-
+function success(){
+  [523.3,587.3,659.3,784,880,1046.5,1174.7,1318.5,1568].forEach((f,j)=>pluck(f,.3+j*.11,.1,1.4));
+  [2093,2349,2637].forEach((f,j)=>pluck(f,1.4+j*.14,.04,1.6));
+  [523.3,659.3,784].forEach(f=>pad(f,1.2,.045,4.5));
+}
 function showTurns(){
   const t=$('turns');
   if(!limited){t.textContent='';t.classList.remove('low');return}
@@ -244,12 +261,12 @@ function showTurns(){
 function fail(){
   locked=true;state='fail';
   $('msgt').textContent='Out of turns. Take a breath and try again.';
-  $('next').textContent='Try again';$('msg').classList.add('show');tone(196,0,.05,1.8);
+  $('next').textContent='Try again';$('msg').classList.add('show');pluck(392,0,.08,1.4);pluck(330,.22,.07,1.6);
 }
 function win(){
   locked=true;$('msg').classList.add('show');
   if(level>=maxL){maxL=level+1;saveMax()}
-  $('next').textContent=level>=TOTAL?'All levels':'Next level';state='win';
+  $('next').textContent=level>=TOTAL?'All levels':'Next level';state='win';clearState();
   success();
 }
 
@@ -287,8 +304,8 @@ $('bExit').onclick=()=>{
   setTimeout(()=>{$('sub').textContent='You can now close the app with your phone Home or Back button.'},300);
 };
 $('bSound').onclick=()=>{sound=!sound;$('bSound').setAttribute('aria-pressed',sound)};
-document.querySelectorAll('#diff .btn').forEach(b=>{b.onclick=()=>{diff=b.dataset.d;try{localStorage.setItem('lotus-diff',diff)}catch(e){}setDiff();loadLevel();build()}});
-setDiff();loadLevel();build();
+document.querySelectorAll('#diff .btn').forEach(b=>{b.onclick=()=>{diff=b.dataset.d;try{localStorage.setItem('lotus-diff',diff)}catch(e){}setDiff();start()}});
+setDiff();start();
 </script>
 <script>if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(function(){})</script>
 </body>
