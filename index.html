@@ -38,19 +38,25 @@ button.btn{font:inherit;font-size:15px;color:var(--ink);background:rgba(255,255,
 button.btn:focus-visible{outline:2px solid var(--wet);outline-offset:2px}
 button.btn[aria-pressed=true]{background:rgba(255,255,255,.18)}
 #bar,#diff{display:flex;gap:4px;padding:4px;border-radius:999px;background:rgba(10,20,24,.5)}
+#bar{flex-wrap:wrap;justify-content:center;max-width:96vw;border-radius:24px}
+#bar .btn[disabled]{opacity:.35;cursor:default}
 #bar .btn,#diff .btn{background:none;padding:9px 12px;font-size:14px}
 #bar .btn[aria-pressed=true],#diff .btn[aria-pressed=true]{background:rgba(255,255,255,.16)}
 #lv{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(5,10,14,.74);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:10}
 #lv.open{display:flex}
 #lvp{width:min(92vw,420px);max-height:84vh;overflow:auto;padding:20px;border-radius:22px;background:rgba(18,30,36,.95)}
 #lvp h2{margin:0 0 14px;font-weight:500;font-size:20px;text-align:center}
-#grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}
+#grid{display:grid;grid-template-columns:repeat(6,1fr);gap:9px;margin-bottom:14px}
 .lvb{all:unset;box-sizing:border-box;aspect-ratio:1;border-radius:14px;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative}
 .lvb[disabled]{opacity:.28;cursor:default}
 .lvb.cur{outline:2px solid #fff;outline-offset:2px}
 .lvb.done::after{content:"";position:absolute;right:6px;top:6px;width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.9}
 .lvb:focus-visible{outline:2px solid #fff;outline-offset:2px}
 #lvc{display:block;margin:0 auto}
+.lvb.chb{border-radius:50%}
+#board.chal{outline:1px solid var(--wet);outline-offset:8px;border-radius:18px;box-shadow:0 0 36px var(--glow)}
+.locked .bg{stroke:var(--wet);stroke-opacity:.55}
+.pin{fill:var(--wet);opacity:.75}
 #turns{font-size:16px;letter-spacing:.03em;min-height:1.3em;opacity:.92;transition:color .4s}
 #turns.low{color:var(--pink)}
 @media (prefers-reduced-motion:reduce){*{transition-duration:.01s!important;transition-delay:0s!important}}
@@ -65,6 +71,7 @@ button.btn[aria-pressed=true]{background:rgba(255,255,255,.18)}
 <div id="msg"><span id="msgt">Every lotus is open.</span><button class="btn" id="next">Next level</button></div>
 <div id="bar">
   <button class="btn" id="bSound" aria-pressed="true">Sound</button>
+  <button class="btn" id="bUndo">Undo</button>
   <button class="btn" id="bLevels">Levels</button>
   <button class="btn" id="bNew">Restart</button>
   <button class="btn" id="bExit">Exit</button>
@@ -73,13 +80,14 @@ button.btn[aria-pressed=true]{background:rgba(255,255,255,.18)}
 <script>
 const DIRS=[[-1,0],[0,1],[1,0],[0,-1]],SCALE=[261.6,293.7,329.6,392,440,523.3,587.3,659.3];
 const ARMS=['M50 50V0','M50 50H100','M50 50V100','M50 50H0'];
-const TOTAL=30;
+const TOTAL=36;
 const RANGE={easy:[3,5],medium:[4,6],hard:[5,8],ultimate:[7,9]};
 const BRANCH={easy:.15,medium:.45,hard:.7,ultimate:.92};
 const SHAPES={easy:['square'],medium:['square','octagon','triangle','plus'],hard:['octagon','triangle','plus','diamond','ring','hourglass'],ultimate:['octagon','plus','diamond','ring','hourglass','triangle']};
 const NAMES={square:'Square',octagon:'Octagon',plus:'Cross',triangle:'Triangle',diamond:'Diamond',ring:'Ring',hourglass:'Hourglass'};
-const MIN={square:3,octagon:4,triangle:4,plus:5,diamond:5,ring:5,hourglass:5};
+const MIN={square:3,octagon:4,triangle:4,plus:5,diamond:5,ring:5,hourglass:5,heart:6};
 const SLACK={medium:[1.6,3],hard:[1.35,2],ultimate:[1.2,2]};
+const UNDOS={medium:5,hard:3,ultimate:2};
 const THEMES=[
  {name:'Moonlit Teal',bg1:'#21414a',bg2:'#0d1a20',wet:'#8be8d4',dry:'#51656d',pink:'#f2b8c6'},
  {name:'Rose Dusk',bg1:'#4a2a3a',bg2:'#1a0e18',wet:'#ffb3c1',dry:'#6d5560',pink:'#ffe0b8'},
@@ -89,10 +97,27 @@ const THEMES=[
  {name:'Amber Sunset',bg1:'#5a3a1e',bg2:'#1f130a',wet:'#ffd27f',dry:'#77634c',pink:'#ffb59a'},
  {name:'Sand Dune',bg1:'#4d4531',bg2:'#1a1710',wet:'#f2e2a0',dry:'#6c6650',pink:'#e8a0a0'},
  {name:'Aurora',bg1:'#2a1f4d',bg2:'#0b1620',wet:'#6ff5c1',dry:'#58607a',pink:'#ff9ed1'}];
-const theme=l=>THEMES[(l-1)%THEMES.length];
+const CTHEMES=[
+ {name:'Cherry Moon',bg1:'#5c1f3d',bg2:'#12060f',wet:'#ff7eb6',dry:'#70495e',pink:'#ffe3a3'},
+ {name:'Emerald Night',bg1:'#0f5a43',bg2:'#04140e',wet:'#5dffb0',dry:'#4a6d60',pink:'#ffd0f0'},
+ {name:'Golden Hour',bg1:'#6b4a0f',bg2:'#1a1004',wet:'#ffd45e',dry:'#7a6a40',pink:'#ff9aa8'},
+ {name:'Violet Storm',bg1:'#43237a',bg2:'#0c0620',wet:'#b58cff',dry:'#62588a',pink:'#8bf5ff'},
+ {name:'Ice Crystal',bg1:'#1a5a7a',bg2:'#041420',wet:'#9ff0ff',dry:'#5a7384',pink:'#ffffff'},
+ {name:'Ember Sky',bg1:'#7a2410',bg2:'#1c0602',wet:'#ff8a4d',dry:'#7d5548',pink:'#ffe28a'}];
+const CHAL=[
+ {name:'Twin Springs',shape:'octagon',springs:2,locks:0,desc:'Two springs feed this pond.'},
+ {name:'Heart Pond',shape:'heart',springs:1,locks:0,desc:'A heart-shaped pond.'},
+ {name:'Stone Garden',shape:'diamond',springs:1,locks:.22,desc:'Stones with a dot are locked in place.'},
+ {name:'Three Springs',shape:'plus',springs:3,locks:0,desc:'Three springs feed this pond.'},
+ {name:'Frozen Rings',shape:'ring',springs:2,locks:.2,desc:'Two springs, and some stones are locked.'},
+ {name:'Grand Finale',shape:'heart',springs:3,locks:.2,desc:'Three springs, locked stones and a heart-shaped pond.'}];
+const CH_N={easy:6,medium:7,hard:8,ultimate:9};
+const isChal=l=>l%6===0;
+const nlev=l=>l-Math.floor(l/6);
+const theme=l=>isChal(l)?CTHEMES[(l/6-1)%CTHEMES.length]:THEMES[(nlev(l)-1)%THEMES.length];
 const $=id=>document.getElementById(id);
-let level=1,maxL=1,n=3,T=[],src=0,locked=false,sound=true,ctx=null,diff='easy',rnd=Math.random,left=0,limited=false,state='';
-const lk=()=>'lotus-level-'+diff;
+let level=1,maxL=1,n=3,T=[],srcs=[],locked=false,sound=true,ctx=null,diff='easy',rnd=Math.random,left=0,limited=false,state='',hist=[],undos=0;
+const lk=()=>'lotus2-level-'+diff;
 
 try{diff=localStorage.getItem('lotus-diff')||'easy';if(!RANGE[diff])diff='easy'}catch(e){}
 function loadLevel(){
@@ -124,10 +149,11 @@ function inShape(sh,r,c){
   if(sh==='diamond')return Math.abs(r-mid)+Math.abs(c-mid)<=mid+.5;
   if(sh==='ring'){const k=Math.max(1,Math.floor(n/3));return !(r>=k&&r<n-k&&c>=k&&c<n-k)}
   if(sh==='hourglass')return Math.abs(c-mid)<=Math.abs(r-mid);
+  if(sh==='heart'){const x=(c-mid)/(n/2)*1.25,y=(mid-r)/(n/2)*1.25-.15,a=x*x+y*y-1;return a*a*a-x*x*y*y*y<=0&&!(r===0&&Math.abs(c-mid)<=.5)}
   return true;
 }
 
-function gen(sh){
+function gen(sh,springs=1){
   const ok=Array.from({length:n*n},(_,i)=>inShape(sh,(i/n)|0,i%n));
   const cells=ok.map((v,i)=>v?i:-1).filter(i=>i>=0);
   const m=Array(n*n).fill(0),seen=Array(n*n).fill(false),s=cells[(rnd()*cells.length)|0],act=[s],pr=BRANCH[diff];
@@ -140,11 +166,38 @@ function gen(sh){
     const [a,b,i]=opts[(rnd()*opts.length)|0],k=a*n+b;
     seen[k]=true;m[c]|=1<<i;m[k]|=1<<((i+2)%4);act.push(k);
   }
-  return {m,s,seen};
+  if(springs<=1)return {m,srcs:[s],seen};
+  const edges=[];
+  for(let c=0;c<n*n;c++){if(m[c]&2)edges.push([c,c+1]);if(m[c]&4)edges.push([c,c+n])}
+  for(let a=0;a<80;a++){
+    const mm=m.slice(),pool=edges.slice();
+    for(let k=0;k<springs-1;k++){
+      const e=pool.splice((rnd()*pool.length)|0,1)[0],d=e[1]-e[0]===1?[2,8]:[4,1];
+      mm[e[0]]&=~d[0];mm[e[1]]&=~d[1];
+    }
+    const comp=Array(n*n).fill(-1),sizes=[];
+    for(let c=0;c<n*n;c++){
+      if(!seen[c]||comp[c]>=0)continue;
+      const id=sizes.length,q=[c];comp[c]=id;let sz=0;
+      while(q.length){
+        const x=q.pop();sz++;
+        DIRS.forEach((dd,i)=>{
+          if(!(mm[x]>>i&1))return;
+          const k2=(((x/n)|0)+dd[0])*n+(x%n+dd[1]);
+          if(comp[k2]<0){comp[k2]=id;q.push(k2)}
+        });
+      }
+      sizes.push(sz);
+    }
+    if((sizes.length===springs&&sizes.every(z=>z>=4))||a===79){
+      const ss=sizes.map((_,id)=>{const cs=[];comp.forEach((v,i)=>{if(v===id)cs.push(i)});return cs[(rnd()*cs.length)|0]});
+      return {m:mm,srcs:ss,seen};
+    }
+  }
 }
 
 function flow(){
-  const d=Array(n*n).fill(-1);d[src]=0;const qu=[src];
+  const d=Array(n*n).fill(-1),qu=[];srcs.forEach(x=>{d[x]=0;qu.push(x)});
   while(qu.length){
     const c=qu.shift(),r=(c/n)|0,q=c%n,e=eff(c);
     DIRS.forEach((dd,i)=>{
@@ -167,32 +220,50 @@ function update(){
   return {wet,done:wet===tot};
 }
 
-function build(restore){
-  const [lo,hi]=RANGE[diff],span=hi-lo+1;
-  n=lo+Math.min(span-1,Math.floor((level-1)/Math.ceil(TOTAL/span)));
-  locked=false;$('msg').classList.remove('show');$('msgt').textContent='Every lotus is open.';$('next').textContent='Next level';
+function makePuzzle(){
+  const ch=isChal(level)?CHAL[level/6-1]:null;
+  let sh,springs=1,locks=0;
+  if(ch){n=CH_N[diff];sh=ch.shape;springs=ch.springs;locks=ch.locks}
+  else{const [lo,hi]=RANGE[diff],span=hi-lo+1;n=lo+Math.min(span-1,Math.floor((nlev(level)-1)/Math.ceil(30/span)))}
   rnd=mulberry(seedOf(diff+':'+level));
-  const th=theme(level);applyTheme(th);
-  const so=SHAPES[diff].filter(x=>MIN[x]<=n),sh=(so.length?so:['square'])[(rnd()*Math.max(so.length,1))|0];
+  if(!ch){const so=SHAPES[diff].filter(x=>MIN[x]<=n);sh=(so.length?so:['square'])[(rnd()*Math.max(so.length,1))|0]}
+  let tries=0;
   do{
-    const g=gen(sh);T=g.m.map((m,i)=>({m,r:(rnd()*4)|0,empty:!g.seen[i]}));src=g.s;
-  }while(flow().every((v,i)=>T[i].empty||v>=0));
-  let par=0;T.forEach(t=>{if(t.empty)return;let k=0,m=rot(t.m,t.r);while(m!==t.m&&k<4){m=rot(m,1);k++}par+=k});
-  limited=!!SLACK[diff];left=limited?Math.ceil(par*SLACK[diff][0])+SLACK[diff][1]:0;state='';
-  if(restore&&restore.r&&restore.r.length===T.length){T.forEach((t,i)=>{t.r=restore.r[i]|0});if(limited)left=restore.left|0}
+    const g=gen(sh,springs);
+    T=g.m.map((m,i)=>({m,r:(rnd()*4)|0,empty:!g.seen[i],locked:false}));srcs=g.srcs;
+    if(locks){
+      const cand=[];
+      T.forEach((t,i)=>{if(!t.empty&&!srcs.includes(i)&&[3,6,9,12,7,11,13,14].includes(t.m))cand.push(i)});
+      const k=Math.round(cand.length*locks);
+      for(let j=0;j<k;j++){const x=cand.splice((rnd()*cand.length)|0,1)[0];T[x].locked=true;T[x].r=0}
+    }
+  }while(flow().every((v,i)=>T[i].empty||v>=0)&&++tries<50);
+  let par=0;
+  T.forEach(t=>{if(t.empty)return;let k=0,m=rot(t.m,t.r);while(m!==t.m&&k<4){m=rot(m,1);k++}par+=k});
+  limited=!!SLACK[diff];left=limited?Math.ceil(par*SLACK[diff][0])+SLACK[diff][1]:0;
+  return {sh,ch};
+}
+
+function build(restore){
+  locked=false;$('msg').classList.remove('show');$('msgt').textContent='Every lotus is open.';$('next').textContent='Next level';
+  const {sh,ch}=makePuzzle();
+  const th=theme(level);applyTheme(th);
+  state='';hist=[];undos=limited?UNDOS[diff]:Infinity;
+  if(restore&&restore.r&&restore.r.length===T.length){T.forEach((t,i)=>{t.r=restore.r[i]|0});if(limited)left=restore.left|0;hist=Array.isArray(restore.h)?restore.h:[];if(limited&&restore.u>=0)undos=restore.u}
   showTurns();saveState();
-  $('title').textContent='Level '+level;
-  $('sub').textContent=(level===1&&diff==='easy')?'Turn the stones so the water reaches every lotus.':NAMES[sh]+' pond · '+th.name;
-  const b=$('board');b.style.gridTemplateColumns='repeat('+n+',1fr)';b.innerHTML='';
+  $('title').textContent=ch?'Challenge '+(level/6)+' \u2605':'Level '+nlev(level);
+  $('sub').textContent=ch?ch.name+': '+ch.desc:((level===1&&diff==='easy')?'Turn the stones so the water reaches every lotus.':NAMES[sh]+' pond \u00b7 '+th.name);
+  const b=$('board');b.classList.toggle('chal',!!ch);b.style.gridTemplateColumns='repeat('+n+',1fr)';b.innerHTML='';
   T.forEach((t,i)=>{
     if(t.empty){b.appendChild(document.createElement('div'));return}
-    const bits=[0,1,2,3].filter(k=>t.m>>k&1),leaf=bits.length===1&&i!==src;
+    const bits=[0,1,2,3].filter(k=>t.m>>k&1),isSrc=srcs.includes(i),leaf=bits.length===1&&!isSrc;
     let deco='';
-    if(i===src)deco='<circle class="spring" cx="50" cy="50" r="19"/><circle class="ring" cx="50" cy="50" r="28"/>';
+    if(isSrc)deco='<circle class="spring" cx="50" cy="50" r="19"/><circle class="ring" cx="50" cy="50" r="28"/>';
     else if(leaf)deco='<g class="lotus">'+[0,1,2,3,4,5,6,7].map(k=>'<ellipse cx="50" cy="33" rx="6.5" ry="14" transform="rotate('+k*45+' 50 50)"/>').join('')+'<circle class="heart" cx="50" cy="50" r="6"/></g>';
     else deco='<circle class="node" cx="50" cy="50" r="11"/>';
+    if(t.locked)deco+='<circle class="pin" cx="82" cy="18" r="5"/>';
     const el=document.createElement('button');
-    el.className='tile';el.setAttribute('aria-label','Stone '+(i+1)+', tap to turn');
+    el.className='tile'+(t.locked?' locked':'');el.setAttribute('aria-label','Stone '+(i+1)+(t.locked?', locked':', tap to turn'));
     el.innerHTML='<svg viewBox="0 0 100 100"><rect class="bg" x="3" y="3" width="94" height="94" rx="14"/><g class="ch" fill="none" stroke-width="14">'+bits.map(k=>'<path d="'+ARMS[k]+'"/>').join('')+'</g>'+deco+'</svg>';
     el.firstChild.style.transform='rotate('+t.r*90+'deg)';
     el.onclick=()=>turn(i);
@@ -201,9 +272,9 @@ function build(restore){
   update();
 }
 
-function saveState(){try{localStorage.setItem('lotus-state-'+diff,JSON.stringify({level,left,r:T.map(t=>t.r)}))}catch(e){}}
-function clearState(){try{localStorage.removeItem('lotus-state-'+diff)}catch(e){}}
-function loadState(){try{const o=JSON.parse(localStorage.getItem('lotus-state-'+diff)||'null');return o&&o.level>=1&&o.level<=TOTAL&&Array.isArray(o.r)?o:null}catch(e){return null}}
+function saveState(){try{localStorage.setItem('lotus2-state-'+diff,JSON.stringify({level,left,r:T.map(t=>t.r),h:hist.slice(-300),u:undos===Infinity?-1:undos}))}catch(e){}}
+function clearState(){try{localStorage.removeItem('lotus2-state-'+diff)}catch(e){}}
+function loadState(){try{const o=JSON.parse(localStorage.getItem('lotus2-state-'+diff)||'null');return o&&o.level>=1&&o.level<=TOTAL&&Array.isArray(o.r)?o:null}catch(e){return null}}
 function start(){
   const sv=sound;sound=false;
   loadLevel();const st=loadState();if(st)level=st.level;
@@ -213,9 +284,19 @@ function start(){
   sound=sv;
 }
 
+function undo(){
+  if(!hist.length||undos<=0||state==='win')return;
+  const i=hist.pop();T[i].r--;
+  $('board').children[i].firstChild.style.transform='rotate('+T[i].r*90+'deg)';
+  if(limited){left++;undos--}
+  if(locked&&state==='fail'){locked=false;state='';$('msg').classList.remove('show')}
+  showTurns();update();saveState();pluck(300,0,.06,.5);
+}
+
 function turn(i){
   if(locked)return;
-  T[i].r++;if(limited){left--;showTurns()}
+  if(T[i].locked){pluck(180,0,.05,.4);return}
+  T[i].r++;hist.push(i);if(hist.length>500)hist.shift();if(limited)left--;showTurns();
   $('board').children[i].firstChild.style.transform='rotate('+T[i].r*90+'deg)';
   const s=update();saveState();
   drop();pluck(SCALE[s.wet%SCALE.length],.05,.1,1);
@@ -252,21 +333,27 @@ function success(){
   [523.3,587.3,659.3,784,880,1046.5,1174.7,1318.5,1568].forEach((f,j)=>pluck(f,.3+j*.11,.1,1.4));
   [2093,2349,2637].forEach((f,j)=>pluck(f,1.4+j*.14,.04,1.6));
   [523.3,659.3,784].forEach(f=>pad(f,1.2,.045,4.5));
+  if(isChal(level))[1568,1760,2093,2349].forEach((f,j)=>pluck(f,2.1+j*.16,.06,1.8));
 }
-function showTurns(){
+function updateUndo(){
+  const b=$('bUndo');b.textContent='Undo'+(limited?' ('+undos+')':'');
+  b.disabled=!hist.length||undos<=0||state==='win';
+}
+function showTurns(){updateUndo();
   const t=$('turns');
   if(!limited){t.textContent='';t.classList.remove('low');return}
   t.textContent='Turns left: '+left;t.classList.toggle('low',left<=5);
 }
 function fail(){
   locked=true;state='fail';
-  $('msgt').textContent='Out of turns. Take a breath and try again.';
+  $('msgt').textContent=(hist.length&&undos>0)?'Out of turns. Undo a move, or try again.':'Out of turns. Take a breath and try again.';updateUndo();
   $('next').textContent='Try again';$('msg').classList.add('show');pluck(392,0,.08,1.4);pluck(330,.22,.07,1.6);
 }
 function win(){
   locked=true;$('msg').classList.add('show');
   if(level>=maxL){maxL=level+1;saveMax()}
-  $('next').textContent=level>=TOTAL?'All levels':'Next level';state='win';clearState();
+  $('msgt').textContent=isChal(level)?'Challenge complete!':'Every lotus is open.';
+  $('next').textContent=level>=TOTAL?'All levels':(isChal(level+1)?'Next challenge':'Next level');state='win';clearState();updateUndo();
   success();
 }
 
@@ -275,12 +362,12 @@ function openMenu(){
   const g=$('grid');g.innerHTML='';
   const unlocked=Math.min(maxL,TOTAL);
   for(let l=1;l<=TOTAL;l++){
-    const t=theme(l),b=document.createElement('button');
-    b.className='lvb'+(l===level?' cur':'')+(l<maxL?' done':'');
-    b.textContent=l;b.disabled=l>unlocked;
+    const t=theme(l),c=isChal(l),b=document.createElement('button');
+    b.className='lvb'+(c?' chb':'')+(l===level?' cur':'')+(l<maxL?' done':'');
+    b.textContent=c?'\u2605':nlev(l);b.disabled=l>unlocked;
     b.style.background='linear-gradient(135deg,'+t.bg1+','+t.bg2+')';
     b.style.color=t.wet;b.style.boxShadow='inset 0 0 0 2px '+t.wet+'88';
-    b.setAttribute('aria-label','Level '+l+', '+t.name);
+    b.setAttribute('aria-label',(c?'Challenge '+(l/6):'Level '+nlev(l))+', '+t.name);
     b.onclick=()=>{level=l;closeMenu();build()};
     g.appendChild(b);
   }
@@ -294,6 +381,7 @@ $('next').onclick=()=>{
   level++;build();
 };
 $('bNew').onclick=build;
+$('bUndo').onclick=undo;
 $('bLevels').onclick=openMenu;
 $('lvc').onclick=closeMenu;
 $('lv').onclick=e=>{if(e.target===$('lv'))closeMenu()};
